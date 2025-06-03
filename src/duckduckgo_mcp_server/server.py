@@ -1,15 +1,15 @@
-from mcp.server.fastmcp import FastMCP, Context
-import httpx
-from bs4 import BeautifulSoup
-from typing import List, Dict, Optional, Any
-from dataclasses import dataclass
-import urllib.parse
+import asyncio
+import re
 import sys
 import traceback
-import asyncio
+import urllib.parse
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-import time
-import re
+
+import httpx
+from bs4 import BeautifulSoup
+
+from mcp.server.fastmcp import TMCP, Context
 
 
 @dataclass
@@ -50,7 +50,7 @@ class DuckDuckGoSearcher:
     def __init__(self):
         self.rate_limiter = RateLimiter()
 
-    def format_results_for_llm(self, results: List[SearchResult]) -> str:
+    def format_results_for_llm(self, results: list[SearchResult]) -> str:
         """Format results in a natural language style that's easier for LLMs to process"""
         if not results:
             return "No results were found for your search query. This could be due to DuckDuckGo's bot detection or the query returned no matches. Please try rephrasing your search or try again in a few minutes."
@@ -68,7 +68,7 @@ class DuckDuckGoSearcher:
 
     async def search(
         self, query: str, ctx: Context, max_results: int = 10
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         try:
             # Apply rate limiting
             await self.rate_limiter.acquire()
@@ -205,8 +205,8 @@ class WebContentFetcher:
             return f"Error: An unexpected error occurred while fetching the webpage ({str(e)})"
 
 
-# Initialize FastMCP server
-mcp = FastMCP("ddg-search")
+# Initialize TMCP server
+mcp = TMCP("ddg-search")
 searcher = DuckDuckGoSearcher()
 fetcher = WebContentFetcher()
 
