@@ -1,15 +1,16 @@
-from mcp.server.fastmcp import FastMCP, Context
-import httpx
-from bs4 import BeautifulSoup
-from typing import List, Dict, Optional, Any
-from dataclasses import dataclass
-import urllib.parse
+import asyncio
+import re
 import sys
 import traceback
-import asyncio
+import urllib.parse
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-import time
-import re
+
+import httpx
+from bs4 import BeautifulSoup
+
+from mcp.server.fastmcp import Context, FastMCP
+from tmcp import TmcpManager
 
 
 @dataclass
@@ -28,9 +29,7 @@ class RateLimiter:
     async def acquire(self):
         now = datetime.now()
         # Remove requests older than 1 minute
-        self.requests = [
-            req for req in self.requests if now - req < timedelta(minutes=1)
-        ]
+        self.requests = [req for req in self.requests if now - req < timedelta(minutes=1)]
 
         if len(self.requests) >= self.requests_per_minute:
             # Wait until we can make another request
@@ -50,7 +49,7 @@ class DuckDuckGoSearcher:
     def __init__(self):
         self.rate_limiter = RateLimiter()
 
-    def format_results_for_llm(self, results: List[SearchResult]) -> str:
+    def format_results_for_llm(self, results: list[SearchResult]) -> str:
         """Format results in a natural language style that's easier for LLMs to process"""
         if not results:
             return "No results were found for your search query. This could be due to DuckDuckGo's bot detection or the query returned no matches. Please try rephrasing your search or try again in a few minutes."
@@ -66,9 +65,7 @@ class DuckDuckGoSearcher:
 
         return "\n".join(output)
 
-    async def search(
-        self, query: str, ctx: Context, max_results: int = 10
-    ) -> List[SearchResult]:
+    async def search(self, query: str, ctx: Context, max_results: int = 10) -> list[SearchResult]:
         try:
             # Apply rate limiting
             await self.rate_limiter.acquire()
@@ -83,9 +80,7 @@ class DuckDuckGoSearcher:
             await ctx.info(f"Searching DuckDuckGo for: {query}")
 
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.BASE_URL, data=data, headers=self.HEADERS, timeout=30.0
-                )
+                response = await client.post(self.BASE_URL, data=data, headers=self.HEADERS, timeout=30.0)
                 response.raise_for_status()
 
             # Parse HTML response
@@ -159,9 +154,7 @@ class WebContentFetcher:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     url,
-                    headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                    },
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
                     follow_redirects=True,
                     timeout=30.0,
                 )
@@ -189,9 +182,7 @@ class WebContentFetcher:
             if len(text) > 8000:
                 text = text[:8000] + "... [content truncated]"
 
-            await ctx.info(
-                f"Successfully fetched and parsed content ({len(text)} characters)"
-            )
+            await ctx.info(f"Successfully fetched and parsed content ({len(text)} characters)")
             return text
 
         except httpx.TimeoutException:
@@ -205,8 +196,8 @@ class WebContentFetcher:
             return f"Error: An unexpected error occurred while fetching the webpage ({str(e)})"
 
 
-# Initialize FastMCP server
-mcp = FastMCP("ddg-search")
+# Initialize TMCP server
+mcp = FastMCP("ddg-search", port=8002, transport_manager=TmcpManager(transport="http://localhost:8002/mcp"))
 searcher = DuckDuckGoSearcher()
 fetcher = WebContentFetcher()
 
@@ -242,7 +233,7 @@ async def fetch_content(url: str, ctx: Context) -> str:
 
 
 def main():
-    mcp.run()
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":
